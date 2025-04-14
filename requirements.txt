@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+langchain
+python-dotenv
+pinecone-client
+supabase
+google-api-python-client
