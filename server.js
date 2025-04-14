@@ -84,9 +84,8 @@ const tools = [
 
 // === Initialize AI Model ===
 const model = new ChatGoogleGenerativeAI({
-  model: "gemini-1.5-flash",
+  model: "gemini-2.0-flash",
   apiKey: GOOGLE_API_KEY,
-  temperature: 0.7,
   systemInstruction: {
     role: "system",
     content: `You are Chemi, an AI science assistant. Follow these rules:
@@ -106,7 +105,7 @@ const executor = await initializeAgentExecutorWithOptions(tools, model, {
 
 // === In-Memory Chat History ===
 const chatHistory = new Map(); // Stores { userId: messageHistory[] }
-
+// if (history.length > 10) history.shift(); // Keep last 10 messages
 // Helper function to manage history
 const getChatHistory = (userId) => {
   if (!chatHistory.has(userId)) {
