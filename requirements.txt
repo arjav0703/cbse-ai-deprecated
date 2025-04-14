@@ -1,8 +1,10 @@
 fastapi
 uvicorn
-langchain
+langchain-core>=0.1.0
+langchain-community>=0.0.10
+langchain-google-genai
 python-dotenv
-pinecone-client
+pinecone
 supabase
 google-api-python-client
-langchain-community
+google-generativeai

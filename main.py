@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Request
-from langchain.embeddings import GooglePalmEmbeddings
-from langchain.chat_models import ChatGooglePalm
-from langchain.vectorstores import Pinecone
+from langchain_community.embeddings import GoogleGenerativeAIEmbeddings
+from langchain_community.chat_models import ChatGooglePalm
+from langchain_community.vectorstores import Pinecone as LangchainPinecone
 from langchain.agents import initialize_agent, Tool
 from langchain.memory import ConversationBufferWindowMemory
 from supabase import create_client, Client
-import pinecone
+from pinecone import Pinecone
 from dotenv import load_dotenv
 import os
 
@@ -18,14 +18,33 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENV = os.getenv("PINECONE_ENV")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")  # optional for Google setup
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# Init Pinecone client (correct initialization)
+pc = Pinecone(
+    api_key=PINECONE_API_KEY
+)
+
+# Connect to existing index
+index = pc.Index(PINECONE_INDEX)
+
+# Setup embedding model
+embedding = GoogleGenerativeAIEmbeddings(
+    google_api_key=GOOGLE_API_KEY,
+    model="models/embedding-001"
+)
+
+# LangChain-compatible vector store wrapper
+vector_store = LangchainPinecone(index, embedding.embed_query, text_key="text")
 
 # Initialize services
 app = FastAPI()
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-pinecone.init(api_key=PINECONE_API_KEY, environment=PINECONE_ENV)
-embedding = GooglePalmEmbeddings(model="models/text-embedding-004")
+embedding = GoogleGenerativeAIEmbeddings(
+    google_api_key=GOOGLE_API_KEY,
+    model="models/embedding-001"
+)
 vector_store = Pinecone.from_existing_index(index_name=PINECONE_INDEX, embedding=embedding)
 
 chat_model = ChatGooglePalm(model="models/gemini-2.0-flash")
