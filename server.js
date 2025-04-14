@@ -6,8 +6,8 @@ import {
 } from "@langchain/google-genai";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { PineconeStore } from "@langchain/community/vectorstores/pinecone";
-import { HumanMessage } from "@langchain/core/messages";
 import { initializeAgentExecutorWithOptions } from "langchain/agents";
+import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import pkg from "@supabase/supabase-js";
 const { createClient } = pkg;
 
@@ -105,8 +105,9 @@ const executor = await initializeAgentExecutorWithOptions(tools, model, {
 
 // === In-Memory Chat History ===
 const chatHistory = new Map(); // Stores { userId: messageHistory[] }
-// if (history.length > 10) history.shift(); // Keep last 10 messages
-// Helper function to manage history
+
+const MAX_HISTORY_LENGTH = 20; // Keep last 10 message pairs
+
 const getChatHistory = (userId) => {
   if (!chatHistory.has(userId)) {
     chatHistory.set(userId, []);
@@ -114,32 +115,60 @@ const getChatHistory = (userId) => {
   return chatHistory.get(userId);
 };
 
+const pruneOldMessages = (history) => {
+  if (history.length > MAX_HISTORY_LENGTH) {
+    // Remove oldest messages while keeping pairs intact
+    const removeCount = history.length - MAX_HISTORY_LENGTH;
+    history.splice(0, removeCount);
+  }
+  return history;
+};
+
 app.post("/webhook", async (req, res) => {
   try {
-    const { message, userId = "default" } = req.body; // Default ID for anonymous users
+    const { message, userId = "default" } = req.body;
     const history = getChatHistory(userId);
 
-    // Add user message to history
+    // Add new user message to history
     history.push({ role: "user", content: message });
+    pruneOldMessages(history);
 
-    // Get AI response
+    // Convert history to LangChain Message format
+    const langChainHistory = history.map((msg) =>
+      msg.role === "user"
+        ? new HumanMessage(msg.content)
+        : new AIMessage(msg.content),
+    );
+
+    // Get AI response with history context
     const result = await executor.invoke({
       input: message,
-      chat_history: history, // Pass full history to the agent
+      chat_history: langChainHistory,
     });
 
     // Add AI response to history
     history.push({ role: "assistant", content: result.output });
+    pruneOldMessages(history);
 
     res.json({
       reply: result.output,
-      history, // Optional: return full history to client
+      history: history.slice(-10), // Return recent messages only
     });
   } catch (err) {
     console.error("Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
+// Add cleanup for inactive users (optional)
+setInterval(
+  () => {
+    const now = Date.now();
+    const inactiveThreshold = 24 * 60 * 60 * 1000; // 24 hours
+    // Would need to track last activity time for each user
+  },
+  60 * 60 * 1000,
+); // Run hourly
 
 // === Health Check ===
 app.get("/health", (req, res) => {
