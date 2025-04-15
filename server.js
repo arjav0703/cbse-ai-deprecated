@@ -11,7 +11,7 @@ import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import pkg from "@supabase/supabase-js";
 const { createClient } = pkg;
 
-// Load environment variables
+// === Load Env Vars ===
 const {
   GOOGLE_API_KEY,
   PINECONE_API_KEY,
@@ -21,27 +21,26 @@ const {
   PORT,
 } = process.env;
 
-// Validate required environment variables
 if (!GOOGLE_API_KEY) throw new Error("Missing GOOGLE_API_KEY");
 if (!PINECONE_API_KEY) throw new Error("Missing PINECONE_API_KEY");
 if (!PINECONE_INDEX) throw new Error("Missing PINECONE_INDEX");
 if (!SUPABASE_URL) throw new Error("Missing SUPABASE_URL");
 if (!SUPABASE_KEY) throw new Error("Missing SUPABASE_KEY");
 
-console.log("Environment variables validated");
+console.log("✅ Environment variables validated");
 
-// Initialize Express app
+// === Express App ===
 const app = express();
 app.use(express.json());
 
-// === Setup Pinecone ===
+// === Pinecone Setup ===
 const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
 const pineconeIndex = pinecone.Index(PINECONE_INDEX);
 
-// === Initialize Supabase ===
+// === Supabase ===
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// === Initialize Vector Store ===
+// === Vector Store ===
 const vectorStore = await PineconeStore.fromExistingIndex(
   new GoogleGenerativeAIEmbeddings({
     model: "text-embedding-004",
@@ -50,7 +49,7 @@ const vectorStore = await PineconeStore.fromExistingIndex(
   { pineconeIndex },
 );
 
-// === Define Tools ===
+// === Tools ===
 const tools = [
   {
     name: "insights",
@@ -82,31 +81,30 @@ const tools = [
   },
 ];
 
-// === Initialize AI Model ===
+// === Chat Model ===
 const model = new ChatGoogleGenerativeAI({
   model: "gemini-2.0-flash",
   apiKey: GOOGLE_API_KEY,
   systemInstruction: {
     role: "system",
     content: `You are Chemi, an AI science assistant. Follow these rules:
-    1. Check insights first for context about previous interactions
-    2. Use the science database for accurate information
-    3. Store all user feedback
-    4. Be concise but thorough in explanations`,
+1. Check insights first for context about previous interactions
+2. Use the science database for accurate information
+3. Store all user feedback
+4. Be concise but thorough in explanations`,
   },
 });
 
-// === Initialize Agent ===
+// === Agent Executor ===
 const executor = await initializeAgentExecutorWithOptions(tools, model, {
-  agentType: "zero-shot-react-description", // This is the most compatible agent type
+  agentType: "zero-shot-react-description",
   verbose: true,
   returnIntermediateSteps: true,
 });
 
 // === In-Memory Chat History ===
-const chatHistory = new Map(); // Stores { userId: messageHistory[] }
-
-const MAX_HISTORY_LENGTH = 20; // Keep last 10 message pairs
+const chatHistory = new Map(); // { userId: [{ role, content }] }
+const MAX_HISTORY_LENGTH = 20;
 
 const getChatHistory = (userId) => {
   if (!chatHistory.has(userId)) {
@@ -117,58 +115,50 @@ const getChatHistory = (userId) => {
 
 const pruneOldMessages = (history) => {
   if (history.length > MAX_HISTORY_LENGTH) {
-    // Remove oldest messages while keeping pairs intact
-    const removeCount = history.length - MAX_HISTORY_LENGTH;
-    history.splice(0, removeCount);
+    history.splice(0, history.length - MAX_HISTORY_LENGTH);
   }
   return history;
 };
 
+const formatChatHistory = (history) => {
+  return history
+    .map(
+      (msg) => `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`,
+    )
+    .join("\n");
+};
+
+// === Webhook Endpoint ===
 app.post("/webhook", async (req, res) => {
   try {
     const { message, userId = "default" } = req.body;
     const history = getChatHistory(userId);
 
-    // Add new user message to history
+    // Add user message to history
     history.push({ role: "user", content: message });
     pruneOldMessages(history);
 
-    // Convert history to LangChain Message format
-    const langChainHistory = history.map((msg) =>
-      msg.role === "user"
-        ? new HumanMessage(msg.content)
-        : new AIMessage(msg.content),
-    );
+    const formattedHistory = formatChatHistory(history.slice(0, -1)); // exclude current message
+    const finalInput = formattedHistory
+      ? `${formattedHistory}\nUser: ${message}`
+      : `User: ${message}`;
 
-    // Get AI response with history context
-    const result = await executor.invoke({
-      input: message,
-      chat_history: langChainHistory,
-    });
+    // Call agent
+    const result = await executor.invoke({ input: finalInput });
 
-    // Add AI response to history
+    // Save AI response to history
     history.push({ role: "assistant", content: result.output });
     pruneOldMessages(history);
 
     res.json({
       reply: result.output,
-      history: history.slice(-10), // Return recent messages only
+      history: history.slice(-10), // optional
     });
   } catch (err) {
     console.error("Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
-
-// Add cleanup for inactive users (optional)
-setInterval(
-  () => {
-    const now = Date.now();
-    const inactiveThreshold = 24 * 60 * 60 * 1000; // 24 hours
-    // Would need to track last activity time for each user
-  },
-  60 * 60 * 1000,
-); // Run hourly
 
 // === Health Check ===
 app.get("/health", (req, res) => {
