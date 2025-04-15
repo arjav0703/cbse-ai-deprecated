@@ -62,7 +62,7 @@ const tools = [
   },
   {
     name: "feedback",
-    description: "Store feedback into database",
+    description: "Store Mistakes and their solution into database",
     async func(input) {
       const { error } = await supabase
         .from("insights")
@@ -75,7 +75,7 @@ const tools = [
     name: "vector_database",
     description: "Retrieve scientific information from the knowledge base",
     async func(query) {
-      const results = await vectorStore.similaritySearch(query, 5);
+      const results = await vectorStore.similaritySearch(query, 6);
       return results.map((r) => r.pageContent).join("\n\n---\n");
     },
   },
@@ -87,11 +87,7 @@ const model = new ChatGoogleGenerativeAI({
   apiKey: GOOGLE_API_KEY,
   systemInstruction: {
     role: "system",
-    content: `You are Chemi, an AI science assistant. Follow these rules:
-1. Check insights first for context about previous interactions
-2. Use the science database for accurate information
-3. Store all user feedback
-4. Be concise but thorough in explanations`,
+    content: `You are Chemi, an AI agent who answers questions related to science. When you receive a prompt, you must look at the insights database to gain insights and then use the science database to fetch all the scientific knowledge. If the user gives you any feedback, store it to the feedback database`,
   },
 });
 
