@@ -7,11 +7,10 @@ import {
 import { Pinecone } from "@pinecone-database/pinecone";
 import { PineconeStore } from "@langchain/community/vectorstores/pinecone";
 import { initializeAgentExecutorWithOptions } from "langchain/agents";
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import pkg from "@supabase/supabase-js";
 const { createClient } = pkg;
 
-// === Load Env Vars ===
+// === Load Environment Variables ===
 const {
   GOOGLE_API_KEY,
   PINECONE_API_KEY,
@@ -21,26 +20,27 @@ const {
   PORT,
 } = process.env;
 
-if (!GOOGLE_API_KEY) throw new Error("Missing GOOGLE_API_KEY");
-if (!PINECONE_API_KEY) throw new Error("Missing PINECONE_API_KEY");
-if (!PINECONE_INDEX) throw new Error("Missing PINECONE_INDEX");
-if (!SUPABASE_URL) throw new Error("Missing SUPABASE_URL");
-if (!SUPABASE_KEY) throw new Error("Missing SUPABASE_KEY");
+if (
+  !GOOGLE_API_KEY ||
+  !PINECONE_API_KEY ||
+  !PINECONE_INDEX ||
+  !SUPABASE_URL ||
+  !SUPABASE_KEY
+) {
+  throw new Error("Missing required environment variables");
+}
 
-console.log("✅ Environment variables validated");
-
-// === Express App ===
+// === Express Setup ===
 const app = express();
 app.use(express.json());
+
+// === Supabase Client ===
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // === Pinecone Setup ===
 const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
 const pineconeIndex = pinecone.Index(PINECONE_INDEX);
 
-// === Supabase ===
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// === Vector Store ===
 const vectorStore = await PineconeStore.fromExistingIndex(
   new GoogleGenerativeAIEmbeddings({
     model: "text-embedding-004",
@@ -62,7 +62,7 @@ const tools = [
   },
   {
     name: "feedback",
-    description: "Store Mistakes and their solution into database",
+    description: "Store feedback into database",
     async func(input) {
       const { error } = await supabase
         .from("insights")
@@ -75,7 +75,7 @@ const tools = [
     name: "vector_database",
     description: "Retrieve scientific information from the knowledge base",
     async func(query) {
-      const results = await vectorStore.similaritySearch(query, 6);
+      const results = await vectorStore.similaritySearch(query, 5);
       return results.map((r) => r.pageContent).join("\n\n---\n");
     },
   },
@@ -98,25 +98,8 @@ const executor = await initializeAgentExecutorWithOptions(tools, model, {
   returnIntermediateSteps: true,
 });
 
-// === In-Memory Chat History ===
-const chatHistory = new Map(); // { userId: [{ role, content }] }
-const MAX_HISTORY_LENGTH = 20;
-
-const getChatHistory = (userId) => {
-  if (!chatHistory.has(userId)) {
-    chatHistory.set(userId, []);
-  }
-  return chatHistory.get(userId);
-};
-
-const pruneOldMessages = (history) => {
-  if (history.length > MAX_HISTORY_LENGTH) {
-    history.splice(0, history.length - MAX_HISTORY_LENGTH);
-  }
-  return history;
-};
-
-const formatChatHistory = (history) => {
+// === Format Chat History ===
+const formatHistory = (history) => {
   return history
     .map(
       (msg) => `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`,
@@ -127,31 +110,44 @@ const formatChatHistory = (history) => {
 // === Webhook Endpoint ===
 app.post("/webhook", async (req, res) => {
   try {
-    const { message, userId = "default" } = req.body;
-    const history = getChatHistory(userId);
+    const { message, sessionId } = req.body;
 
-    // Add user message to history
-    history.push({ role: "user", content: message });
-    pruneOldMessages(history);
+    if (!message || !sessionId) {
+      return res.status(400).json({ error: "Missing message or sessionId" });
+    }
 
-    const formattedHistory = formatChatHistory(history.slice(0, -1)); // exclude current message
+    // Fetch full history for this session from Supabase
+    const { data: history, error: fetchError } = await supabase
+      .from("messages")
+      .select("role, content")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+
+    if (fetchError) throw new Error(fetchError.message);
+
+    // Format chat history as prompt
+    const formattedHistory = formatHistory(history);
     const finalInput = formattedHistory
       ? `${formattedHistory}\nUser: ${message}`
       : `User: ${message}`;
 
-    // Call agent
+    // Run agent with context
     const result = await executor.invoke({ input: finalInput });
 
-    // Save AI response to history
-    history.push({ role: "assistant", content: result.output });
-    pruneOldMessages(history);
+    // Store user + assistant messages in Supabase
+    const { error: insertError } = await supabase.from("messages").insert([
+      { session_id: sessionId, role: "user", content: message },
+      { session_id: sessionId, role: "assistant", content: result.output },
+    ]);
+
+    if (insertError) throw new Error(insertError.message);
 
     res.json({
       reply: result.output,
-      history: history.slice(-10), // optional
+      sessionId,
     });
   } catch (err) {
-    console.error("Error:", err);
+    console.error("❌ Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
