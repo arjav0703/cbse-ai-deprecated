@@ -17,7 +17,7 @@ const {
   PINECONE_INDEX,
   SUPABASE_URL,
   SUPABASE_KEY,
-  PORT,
+  SCIPORT,
 } = process.env;
 
 if (
@@ -118,7 +118,7 @@ app.post("/webhook", async (req, res) => {
 
     // Fetch full history for this session from Supabase
     const { data: history, error: fetchError } = await supabase
-      .from("messages")
+      .from("sci-messages")
       .select("role, content")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true });
@@ -135,7 +135,7 @@ app.post("/webhook", async (req, res) => {
     const result = await executor.invoke({ input: finalInput });
 
     // Store user + assistant messages in Supabase
-    const { error: insertError } = await supabase.from("messages").insert([
+    const { error: insertError } = await supabase.from("sci-messages").insert([
       { session_id: sessionId, role: "user", content: message },
       { session_id: sessionId, role: "assistant", content: result.output },
     ]);
@@ -160,7 +160,7 @@ app.get("/health", (req, res) => {
 });
 
 // === Start Server ===
-const serverPort = PORT || 3000;
+const serverPort = SCIPORT;
 app.listen(serverPort, () => {
   console.log(`🚀 Server running on port ${serverPort}`);
   console.log(`🔗 Endpoint: http://localhost:${serverPort}/webhook`);
