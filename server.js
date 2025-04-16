@@ -143,8 +143,10 @@ app.post("/webhook", async (req, res) => {
     if (insertError) throw new Error(insertError.message);
 
     res.json({
-      reply: result.output,
+      success: true,
+      response: result.output,
       sessionId,
+      timestamp: Date.now(),
     });
   } catch (err) {
     console.error("❌ Error:", err);
