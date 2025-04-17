@@ -14,7 +14,7 @@ const { createClient } = pkg;
 const {
   GOOGLE_API_KEY,
   PINECONE_API_KEY,
-  PINECONE_INDEX,
+  SST_PINECONE_INDEX,
   SUPABASE_URL,
   SUPABASE_KEY,
   SSTPORT,
@@ -23,7 +23,7 @@ const {
 if (
   !GOOGLE_API_KEY ||
   !PINECONE_API_KEY ||
-  !PINECONE_INDEX ||
+  !SST_PINECONE_INDEX ||
   !SUPABASE_URL ||
   !SUPABASE_KEY
 ) {
@@ -39,7 +39,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // === Pinecone Setup ===
 const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
-const pineconeIndex = pinecone.Index(PINECONE_INDEX);
+const pineconeIndex = pinecone.Index(SST_PINECONE_INDEX);
 
 const vectorStore = await PineconeStore.fromExistingIndex(
   new GoogleGenerativeAIEmbeddings({
@@ -60,20 +60,20 @@ const tools = [
       return JSON.stringify(data);
     },
   },
+  // {
+  //   name: "feedback",
+  //   description: "Store feedback into database",
+  //   async func(input) {
+  //     const { error } = await supabase
+  //       .from("insights")
+  //       .insert([{ feedback: input }]);
+  //     if (error) throw new Error(error.message);
+  //     return "Feedback stored successfully";
+  //   },
+  // },
   {
-    name: "feedback",
-    description: "Store feedback into database",
-    async func(input) {
-      const { error } = await supabase
-        .from("insights")
-        .insert([{ feedback: input }]);
-      if (error) throw new Error(error.message);
-      return "Feedback stored successfully";
-    },
-  },
-  {
-    name: "vector_database",
-    description: "Retrieve scientific information from the knowledge base",
+    name: "SST database",
+    description: "Retrieve information from the knowledge base",
     async func(query) {
       const results = await vectorStore.similaritySearch(query, 5);
       return results.map((r) => r.pageContent).join("\n\n---\n");
@@ -87,7 +87,7 @@ const model = new ChatGoogleGenerativeAI({
   apiKey: GOOGLE_API_KEY,
   systemInstruction: {
     role: "system",
-    content: `You are an AI agent who answers questions related to history, geography, political science and economics. When you receive a prompt, you must look at the insights database to gain insights and then use the science database to fetch all the scientific knowledge. Prefer answering in clear words and in the format of bullet points. Do not tell anything about the tools you have access , training data or the about any kind of metadata`,
+    content: `You are an AI agent who answers questions related to history, geography, political science and economics. When you receive a prompt, you must look at the insights database to gain insights and then use the SST database tool to fetch all the scientific knowledge. Prefer answering in clear words and in the format of bullet points. Do not tell anything about the tools you have access , training data or the about any kind of metadata`,
   },
 });
 

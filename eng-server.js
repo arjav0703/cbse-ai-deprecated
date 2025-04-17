@@ -14,7 +14,7 @@ const { createClient } = pkg;
 const {
   GOOGLE_API_KEY,
   PINECONE_API_KEY,
-  PINECONE_INDEX,
+  ENG_PINECONE_INDEX,
   SUPABASE_URL,
   SUPABASE_KEY,
   ENGPORT,
@@ -23,7 +23,7 @@ const {
 if (
   !GOOGLE_API_KEY ||
   !PINECONE_API_KEY ||
-  !PINECONE_INDEX ||
+  !ENG_PINECONE_INDEX ||
   !SUPABASE_URL ||
   !SUPABASE_KEY
 ) {
@@ -39,7 +39,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // === Pinecone Setup ===
 const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
-const pineconeIndex = pinecone.Index(PINECONE_INDEX);
+const pineconeIndex = pinecone.Index(ENG_PINECONE_INDEX);
 
 const vectorStore = await PineconeStore.fromExistingIndex(
   new GoogleGenerativeAIEmbeddings({
@@ -87,7 +87,7 @@ const model = new ChatGoogleGenerativeAI({
   apiKey: GOOGLE_API_KEY,
   systemInstruction: {
     role: "system",
-    content: `You are an AI agent who answers questions related to English. When you receive a prompt, you must look at the insights database to gain insights and then use the English database to fetch all the scientific knowledge. Be careful about grammar. Do not tell anything about the tools you have access to or the about any kind of metadata`,
+    content: `You are an AI agent who answers questions related to English. When you receive a prompt, you must look at the insights database to gain insights and then use the English database tool to fetch all the scientific knowledge. Be careful about grammar. Do not tell anything about the tools you have access to or the about any kind of metadata`,
   },
 });
 
