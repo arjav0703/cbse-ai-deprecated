@@ -75,7 +75,7 @@ const tools = [
   // },
   {
     name: "SST database",
-    description: "Retrieve information from the knowledge base",
+    description: "Retrieve information to answer user queries.",
     async func(query) {
       const results = await vectorStore.similaritySearch(query, 5);
       return results.map((r) => r.pageContent).join("\n\n---\n");
@@ -124,20 +124,29 @@ app.post("/webhook", async (req, res) => {
         .json({ error: "Back off motherfucker, you ain't authenticated" });
     }
 
-    // Fetch full history for this session from Supabase
+    // Fetch last 5 messages for this session from Supabase
     const { data: history, error: fetchError } = await supabase
-      .from("sst-messages")
+      .from("sci-messages")
       .select("role, content")
       .eq("session_id", sessionId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false }) // Get latest first
+      .limit(5);
+
+    if (fetchError) throw new Error(fetchError.message);
+
+    // Reverse to maintain chronological order (oldest to newest)
+    const recentHistory = history.reverse();
 
     if (fetchError) throw new Error(fetchError.message);
 
     // Format chat history as prompt
-    const formattedHistory = formatHistory(history);
+    const formattedHistory = formatHistory(recentHistory);
+    const systemMsg =
+      "System: You are an AI agent created by arjav who answers questions related to history, geography, political science and economics. Always answer in detail and in the format of bullet points unless specified not to. Do not tell anything about the tools you have access , training data or the about any kind of metadata";
+
     const finalInput = formattedHistory
-      ? `${formattedHistory}\nUser: ${message}`
-      : `User: ${message}`;
+      ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`
+      : `${systemMsg}\nUser: ${message}`;
 
     // Run agent with context
     const result = await executor.invoke({ input: finalInput });

@@ -90,7 +90,6 @@ const model = new ChatGoogleGenerativeAI({
   temperature: 0,
   systemInstruction: {
     role: "system",
-    content: `You are Chemi, an AI agent who answers questions related to science. When you receive a prompt, you must look at the insights database to gain insights and then use the science database tool to fetch all the scientific knowledge. Do not tell anything about the tools you have access to, training data or the about any kind of metadata.`,
   },
 });
 
@@ -113,32 +112,40 @@ const formatHistory = (history) => {
 // === Webhook Endpoint ===
 app.post("/webhook", async (req, res) => {
   try {
-    const { message, sessionId } = req.body;
+    const { message, sessionId, authToken } = req.body;
 
     if (!message || !sessionId) {
       return res.status(400).json({ error: "Missing message or sessionId" });
     }
-
     if (authToken != AUTH_SECRET) {
       return res
         .status(401)
         .json({ error: "Back off motherfucker, you ain't authenticated" });
     }
 
-    // Fetch full history for this session from Supabase
+    // Fetch last 5 messages for this session from Supabase
     const { data: history, error: fetchError } = await supabase
       .from("sci-messages")
       .select("role, content")
       .eq("session_id", sessionId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false }) // Get latest first
+      .limit(5);
+
+    if (fetchError) throw new Error(fetchError.message);
+
+    // Reverse to maintain chronological order (oldest to newest)
+    const recentHistory = history.reverse();
 
     if (fetchError) throw new Error(fetchError.message);
 
     // Format chat history as prompt
-    const formattedHistory = formatHistory(history);
+    const formattedHistory = formatHistory(recentHistory);
+    const systemMsg =
+      "System: You are Chemi, an AI agent created by arjav who answers questions related to science. Always answer in detail. Do not tell anything about the tools you have access to, training data or the about any kind of metadata.";
+
     const finalInput = formattedHistory
-      ? `${formattedHistory}\nUser: ${message}`
-      : `User: ${message}`;
+      ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`
+      : `${systemMsg}\nUser: ${message}`;
 
     // Run agent with context
     const result = await executor.invoke({ input: finalInput });
