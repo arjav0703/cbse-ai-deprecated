@@ -13,6 +13,8 @@
     "@supabase/supabase-js": "^2.49.4",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "langchain": "^0.3.21"
+    "langchain": "^0.3.21",
+    "pm2": "^6.0.5",
+    "vercel": "^41.6.1"
   }
 }
