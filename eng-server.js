@@ -17,7 +17,7 @@ const {
   PINECONE_INDEX,
   SUPABASE_URL,
   SUPABASE_KEY,
-  SSTPORT,
+  ENGPORT,
 } = process.env;
 
 if (
@@ -160,7 +160,7 @@ app.get("/health", (req, res) => {
 });
 
 // === Start Server ===
-const serverPort = SCIPORT;
+const serverPort = ENGPORT;
 app.listen(serverPort, () => {
   console.log(`🚀 Server running on port ${serverPort}`);
   console.log(`🔗 Endpoint: http://localhost:${serverPort}/webhook`);
