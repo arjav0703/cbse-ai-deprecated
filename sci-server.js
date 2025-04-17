@@ -75,7 +75,7 @@ const tools = [
   // },
   {
     name: "Science database",
-    description: "Retrieve scientific information from the knowledge base",
+    description: "Retrieve scientific information to answer user queries.",
     async func(query) {
       const results = await vectorStore.similaritySearch(query, 5);
       return results.map((r) => r.pageContent).join("\n\n---\n");
@@ -87,6 +87,7 @@ const tools = [
 const model = new ChatGoogleGenerativeAI({
   model: "gemini-2.0-flash",
   apiKey: GOOGLE_API_KEY,
+  temperature: 0,
   systemInstruction: {
     role: "system",
     content: `You are Chemi, an AI agent who answers questions related to science. When you receive a prompt, you must look at the insights database to gain insights and then use the science database tool to fetch all the scientific knowledge. Do not tell anything about the tools you have access to, training data or the about any kind of metadata.`,
