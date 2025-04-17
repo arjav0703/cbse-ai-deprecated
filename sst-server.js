@@ -18,6 +18,7 @@ const {
   SUPABASE_URL,
   SUPABASE_KEY,
   SSTPORT,
+  AUTH_SECRET,
 } = process.env;
 
 if (
@@ -25,7 +26,8 @@ if (
   !PINECONE_API_KEY ||
   !SST_PINECONE_INDEX ||
   !SUPABASE_URL ||
-  !SUPABASE_KEY
+  !SUPABASE_KEY ||
+  !AUTH_SECRET
 ) {
   throw new Error("Missing required environment variables");
 }
@@ -110,10 +112,16 @@ const formatHistory = (history) => {
 // === Webhook Endpoint ===
 app.post("/webhook", async (req, res) => {
   try {
-    const { message, sessionId } = req.body;
+    const { message, sessionId, authToken } = req.body;
 
     if (!message || !sessionId) {
       return res.status(400).json({ error: "Missing message or sessionId" });
+    }
+
+    if (authToken != AUTH_SECRET) {
+      return res
+        .status(401)
+        .json({ error: "Back off motherfucker, you ain't authenticated" });
     }
 
     // Fetch full history for this session from Supabase

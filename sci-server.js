@@ -18,6 +18,7 @@ const {
   SUPABASE_URL,
   SUPABASE_KEY,
   SCIPORT,
+  AUTH_SECRET,
 } = process.env;
 
 if (
@@ -25,7 +26,8 @@ if (
   !PINECONE_API_KEY ||
   !SCI_PINECONE_INDEX ||
   !SUPABASE_URL ||
-  !SUPABASE_KEY
+  !SUPABASE_KEY ||
+  !AUTH_SECRET
 ) {
   throw new Error("Missing required environment variables");
 }
@@ -60,17 +62,17 @@ const tools = [
       return JSON.stringify(data);
     },
   },
-  {
-    name: "feedback",
-    description: "Store feedback into database",
-    async func(input) {
-      const { error } = await supabase
-        .from("insights")
-        .insert([{ feedback: input }]);
-      if (error) throw new Error(error.message);
-      return "Feedback stored successfully";
-    },
-  },
+  // {
+  //   name: "feedback",
+  //   description: "Store feedback into database",
+  //   async func(input) {
+  //     const { error } = await supabase
+  //       .from("insights")
+  //       .insert([{ feedback: input }]);
+  //     if (error) throw new Error(error.message);
+  //     return "Feedback stored successfully";
+  //   },
+  // },
   {
     name: "Science database",
     description: "Retrieve scientific information from the knowledge base",
@@ -114,6 +116,12 @@ app.post("/webhook", async (req, res) => {
 
     if (!message || !sessionId) {
       return res.status(400).json({ error: "Missing message or sessionId" });
+    }
+
+    if (authToken != AUTH_SECRET) {
+      return res
+        .status(401)
+        .json({ error: "Back off motherfucker, you ain't authenticated" });
     }
 
     // Fetch full history for this session from Supabase
