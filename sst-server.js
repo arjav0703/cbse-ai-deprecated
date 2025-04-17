@@ -160,7 +160,7 @@ app.get("/health", (req, res) => {
 });
 
 // === Start Server ===
-const serverPort = SCIPORT;
+const serverPort = SSTPORT;
 app.listen(serverPort, () => {
   console.log(`🚀 Server running on port ${serverPort}`);
   console.log(`🔗 Endpoint: http://localhost:${serverPort}/webhook`);
