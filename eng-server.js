@@ -14,7 +14,6 @@ export default async ({ req, res, log, error }) => {
     const {
       GOOGLE_API_KEY,
       PINECONE_API_KEY,
-      ENG_PINECONE_INDEX,
       SUPABASE_URL,
       SUPABASE_KEY,
       AUTH_SECRET,
@@ -23,7 +22,6 @@ export default async ({ req, res, log, error }) => {
     if (
       !GOOGLE_API_KEY ||
       !PINECONE_API_KEY ||
-      !ENG_PINECONE_INDEX ||
       !SUPABASE_URL ||
       !SUPABASE_KEY ||
       !AUTH_SECRET

@@ -14,7 +14,6 @@ export default async ({ req, res, log, error }) => {
     const {
       GOOGLE_API_KEY,
       PINECONE_API_KEY,
-      SCI_PINECONE_INDEX,
       SUPABASE_URL,
       SUPABASE_KEY,
       AUTH_SECRET,
@@ -23,7 +22,6 @@ export default async ({ req, res, log, error }) => {
     if (
       !GOOGLE_API_KEY ||
       !PINECONE_API_KEY ||
-      !SCI_PINECONE_INDEX ||
       !SUPABASE_URL ||
       !SUPABASE_KEY ||
       !AUTH_SECRET
@@ -50,7 +48,7 @@ export default async ({ req, res, log, error }) => {
 
     // === Pinecone Setup ===
     const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
-    const pineconeIndex = pinecone.Index(SCI_PINECONE_INDEX);
+    const pineconeIndex = pinecone.Index("science-9");
 
     const vectorStore = await PineconeStore.fromExistingIndex(
       new GoogleGenerativeAIEmbeddings({
