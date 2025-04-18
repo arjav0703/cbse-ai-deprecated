@@ -31,7 +31,7 @@ export default async ({ req, res, log, error }) => {
       throw new Error("Missing required environment variables");
     }
 
-    const body = JSON.parse(req.body || "{}");
+    const body = req.body || {};
     const { message, sessionId, authToken } = body;
 
     if (!message || !sessionId) {

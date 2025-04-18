@@ -26,7 +26,8 @@ let executor;
 // === Setup Function Entry ===
 export default async ({ req, res }) => {
   try {
-    const { message, sessionId, authToken } = JSON.parse(req.body || "{}");
+    const body = req.body || {};
+    const { message, sessionId, authToken } = body;
 
     if (!message || !sessionId) {
       return res.json({ error: "Missing message or sessionId" }, 400);
@@ -55,16 +56,15 @@ export default async ({ req, res }) => {
           name: "insights",
           description: "Fetch insights from previous chats",
           async func() {
-            const { data, error } = await supabase
-              .from("insights")
-              .select("*");
+            const { data, error } = await supabase.from("insights").select("*");
             if (error) throw new Error(error.message);
             return JSON.stringify(data);
           },
         },
         {
           name: "English database",
-          description: "Retrieve scientific information to answer user queries.",
+          description:
+            "Retrieve scientific information to answer user queries.",
           async func(query) {
             const results = await vectorStore.similaritySearch(query, 5);
             return results.map((r) => r.pageContent).join("\n\n---\n");
