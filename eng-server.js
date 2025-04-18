@@ -50,7 +50,7 @@ export default async ({ req, res, log, error }) => {
 
     // === Pinecone Setup ===
     const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
-    const pineconeIndex = pinecone.Index(ENG_PINECONE_INDEX);
+    const pineconeIndex = pinecone.Index("english");
 
     const vectorStore = await PineconeStore.fromExistingIndex(
       new GoogleGenerativeAIEmbeddings({
