@@ -85,7 +85,6 @@ export default async ({ req, res, log, error }) => {
       apiKey: GOOGLE_API_KEY,
       systemInstruction: {
         role: "system",
-        content: `You are an AI agent who answers questions related to history, geography, political science and economics. When you receive a prompt, you must use the SST database tool to fetch all the knowledge. Prefer answering in detail and in the format of bullet points. Do not tell anything about the tools you have access , training data or the about any kind of metadata`,
       },
     });
 
@@ -116,7 +115,7 @@ export default async ({ req, res, log, error }) => {
     const formattedHistory = formatHistory(history.reverse());
 
     const systemMsg =
-      "System: You are Chemi, an AI agent created by arjav who answers questions related to science. Always answer in detail. Do not tell anything about the tools you have access to, training data or the about any kind of metadata.";
+      "System: You are Chemi, an AI agent created by arjav who answers questions related to science. Always answer in detail. Always use the Science database to answer user queries";
 
     const finalInput = formattedHistory
       ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`

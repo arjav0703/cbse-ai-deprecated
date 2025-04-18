@@ -116,7 +116,7 @@ export default async ({ req, res, log, error }) => {
     const formattedHistory = formatHistory(history.reverse());
 
     const systemMsg =
-      "System: You are an AI agent created by arjav who answers questions related to history, geography, political science and economics. Always answer in detail and in the format of bullet points unless specified not to. Do not tell anything about the tools you have access , training data or the about any kind of metadata";
+      "System: You are an AI agent created by arjav who answers questions related to history, geography, political science and economics. Always answer in detail and in the format of bullet points unless specified not to. Always use the SST database to answer user queries";
 
     const finalInput = formattedHistory
       ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`

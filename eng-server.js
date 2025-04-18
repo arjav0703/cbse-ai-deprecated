@@ -70,7 +70,7 @@ export default async ({ req, res, log, error }) => {
         },
       },
       {
-        name: "Science database",
+        name: "English database",
         description: "Retrieve information to answer user queries.",
         async func(query) {
           const results = await vectorStore.similaritySearch(query, 5);
@@ -85,7 +85,6 @@ export default async ({ req, res, log, error }) => {
       apiKey: GOOGLE_API_KEY,
       systemInstruction: {
         role: "system",
-        content: `You are an AI agent who answers questions related to history, geography, political science and economics. When you receive a prompt, you must use the SST database tool to fetch all the knowledge. Prefer answering in detail and in the format of bullet points. Do not tell anything about the tools you have access , training data or the about any kind of metadata`,
       },
     });
 
@@ -116,7 +115,7 @@ export default async ({ req, res, log, error }) => {
     const formattedHistory = formatHistory(history.reverse());
 
     const systemMsg =
-      "System: You are an AI agent created by Arjav who answers questions related to English. Always answer in detail unless specified not to. Be careful about grammar. Do not tell anything about the tools you have access to or the about any kind of metadata";
+      "System: You are an AI agent created by Arjav who answers questions related to English. Always answer in detail unless specified not to. Always use the English database to answer user queries";
 
     const finalInput = formattedHistory
       ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`
