@@ -1,5 +1,3 @@
-import "dotenv/config";
-import express from "express";
 import {
   ChatGoogleGenerativeAI,
   GoogleGenerativeAIEmbeddings,
@@ -10,136 +8,115 @@ import { initializeAgentExecutorWithOptions } from "langchain/agents";
 import pkg from "@supabase/supabase-js";
 const { createClient } = pkg;
 
-// === Load Environment Variables ===
-const {
-  GOOGLE_API_KEY,
-  PINECONE_API_KEY,
-  SCI_PINECONE_INDEX,
-  SUPABASE_URL,
-  SUPABASE_KEY,
-  SCIPORT,
-  AUTH_SECRET,
-} = process.env;
-
-if (
-  !GOOGLE_API_KEY ||
-  !PINECONE_API_KEY ||
-  !SCI_PINECONE_INDEX ||
-  !SUPABASE_URL ||
-  !SUPABASE_KEY ||
-  !AUTH_SECRET
-) {
-  throw new Error("Missing required environment variables");
-}
-
-// === Express Setup ===
-const app = express();
-app.use(express.json());
-
-// === Supabase Client ===
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// === Pinecone Setup ===
-const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
-const pineconeIndex = pinecone.Index(SCI_PINECONE_INDEX);
-
-const vectorStore = await PineconeStore.fromExistingIndex(
-  new GoogleGenerativeAIEmbeddings({
-    model: "text-embedding-004",
-    apiKey: GOOGLE_API_KEY,
-  }),
-  { pineconeIndex },
-);
-
-// === Tools ===
-const tools = [
-  {
-    name: "insights",
-    description: "Fetch insights from previous chats",
-    async func() {
-      const { data, error } = await supabase.from("insights").select("*");
-      if (error) throw new Error(error.message);
-      return JSON.stringify(data);
-    },
-  },
-  // {
-  //   name: "feedback",
-  //   description: "Store feedback into database",
-  //   async func(input) {
-  //     const { error } = await supabase
-  //       .from("insights")
-  //       .insert([{ feedback: input }]);
-  //     if (error) throw new Error(error.message);
-  //     return "Feedback stored successfully";
-  //   },
-  // },
-  {
-    name: "Science database",
-    description: "Retrieve scientific information to answer user queries.",
-    async func(query) {
-      const results = await vectorStore.similaritySearch(query, 5);
-      return results.map((r) => r.pageContent).join("\n\n---\n");
-    },
-  },
-];
-
-// === Chat Model ===
-const model = new ChatGoogleGenerativeAI({
-  model: "gemini-2.0-flash",
-  apiKey: GOOGLE_API_KEY,
-  temperature: 0,
-  systemInstruction: {
-    role: "system",
-  },
-});
-
-// === Agent Executor ===
-const executor = await initializeAgentExecutorWithOptions(tools, model, {
-  agentType: "zero-shot-react-description",
-  verbose: true,
-  returnIntermediateSteps: true,
-});
-
-// === Format Chat History ===
-const formatHistory = (history) => {
-  return history
-    .map(
-      (msg) => `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`,
-    )
-    .join("\n");
-};
-
-// === Webhook Endpoint ===
-app.post("/webhook", async (req, res) => {
+export default async ({ req, res, log, error }) => {
   try {
-    const { message, sessionId, authToken } = req.body;
+    // === Environment Variables ===
+    const {
+      GOOGLE_API_KEY,
+      PINECONE_API_KEY,
+      SCI_PINECONE_INDEX,
+      SUPABASE_URL,
+      SUPABASE_KEY,
+      AUTH_SECRET,
+    } = process.env;
+
+    if (
+      !GOOGLE_API_KEY ||
+      !PINECONE_API_KEY ||
+      !SCI_PINECONE_INDEX ||
+      !SUPABASE_URL ||
+      !SUPABASE_KEY ||
+      !AUTH_SECRET
+    ) {
+      throw new Error("Missing required environment variables");
+    }
+
+    const body = req.body || {};
+    const { message, sessionId, authToken } = body;
 
     if (!message || !sessionId) {
-      return res.status(400).json({ error: "Missing message or sessionId" });
-    }
-    if (authToken != AUTH_SECRET) {
-      return res
-        .status(401)
-        .json({ error: "Back off motherfucker, you ain't authenticated" });
+      return res.json({ error: "Missing message or sessionId" }, 400);
     }
 
-    // Fetch last 5 messages for this session from Supabase
+    if (authToken !== AUTH_SECRET) {
+      return res.json(
+        { error: "Back off motherfucker, you ain't authenticated" },
+        401,
+      );
+    }
+
+    // === Supabase Client ===
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // === Pinecone Setup ===
+    const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
+    const pineconeIndex = pinecone.Index(SCI_PINECONE_INDEX);
+
+    const vectorStore = await PineconeStore.fromExistingIndex(
+      new GoogleGenerativeAIEmbeddings({
+        model: "text-embedding-004",
+        apiKey: GOOGLE_API_KEY,
+      }),
+      { pineconeIndex },
+    );
+
+    // === Tools ===
+    const tools = [
+      {
+        name: "insights",
+        description: "Fetch insights from previous chats",
+        async func() {
+          const { data, error } = await supabase.from("insights").select("*");
+          if (error) throw new Error(error.message);
+          return JSON.stringify(data);
+        },
+      },
+      {
+        name: "Science database",
+        description: "Retrieve information to answer user queries.",
+        async func(query) {
+          const results = await vectorStore.similaritySearch(query, 5);
+          return results.map((r) => r.pageContent).join("\n\n---\n");
+        },
+      },
+    ];
+
+    // === Chat Model ===
+    const model = new ChatGoogleGenerativeAI({
+      model: "gemini-2.0-flash",
+      apiKey: GOOGLE_API_KEY,
+      systemInstruction: {
+        role: "system",
+        content: `You are an AI agent who answers questions related to history, geography, political science and economics. When you receive a prompt, you must use the SST database tool to fetch all the knowledge. Prefer answering in detail and in the format of bullet points. Do not tell anything about the tools you have access , training data or the about any kind of metadata`,
+      },
+    });
+
+    const executor = await initializeAgentExecutorWithOptions(tools, model, {
+      agentType: "zero-shot-react-description",
+      verbose: true,
+      returnIntermediateSteps: true,
+    });
+
+    // === Format Chat History ===
+    const formatHistory = (history) =>
+      history
+        .map(
+          (msg) =>
+            `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`,
+        )
+        .join("\n");
+
+    // === Fetch & Format Chat History ===
     const { data: history, error: fetchError } = await supabase
       .from("sci-messages")
       .select("role, content")
       .eq("session_id", sessionId)
-      .order("created_at", { ascending: false }) // Get latest first
+      .order("created_at", { ascending: false })
       .limit(5);
 
     if (fetchError) throw new Error(fetchError.message);
+    const formattedHistory = formatHistory(history.reverse());
 
-    // Reverse to maintain chronological order (oldest to newest)
-    const recentHistory = history.reverse();
-
-    if (fetchError) throw new Error(fetchError.message);
-
-    // Format chat history as prompt
-    const formattedHistory = formatHistory(recentHistory);
     const systemMsg =
       "System: You are Chemi, an AI agent created by arjav who answers questions related to science. Always answer in detail. Do not tell anything about the tools you have access to, training data or the about any kind of metadata.";
 
@@ -147,10 +124,10 @@ app.post("/webhook", async (req, res) => {
       ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`
       : `${systemMsg}\nUser: ${message}`;
 
-    // Run agent with context
+    // === Run Agent ===
     const result = await executor.invoke({ input: finalInput });
 
-    // Store user + assistant messages in Supabase
+    // === Store messages in Supabase ===
     const { error: insertError } = await supabase.from("sci-messages").insert([
       { session_id: sessionId, role: "user", content: message },
       { session_id: sessionId, role: "assistant", content: result.output },
@@ -158,26 +135,15 @@ app.post("/webhook", async (req, res) => {
 
     if (insertError) throw new Error(insertError.message);
 
-    res.json({
+    // === Return Response ===
+    return res.json({
       success: true,
       response: result.output,
       sessionId,
       timestamp: Date.now(),
     });
   } catch (err) {
-    console.error("❌ Error:", err);
-    res.status(500).json({ error: err.message });
+    error("❌ Error:", err);
+    return res.json({ error: err.message }, 500);
   }
-});
-
-// === Health Check ===
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "healthy" });
-});
-
-// === Start Server ===
-const serverPort = SCIPORT;
-app.listen(serverPort, () => {
-  console.log(`🚀 Server running on port ${serverPort}`);
-  console.log(`🔗 Endpoint: http://localhost:${serverPort}/webhook`);
-});
+};
