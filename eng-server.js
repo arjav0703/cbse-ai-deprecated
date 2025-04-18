@@ -8,24 +8,29 @@ import { initializeAgentExecutorWithOptions } from "langchain/agents";
 import pkg from "@supabase/supabase-js";
 const { createClient } = pkg;
 
-// === Load Environment Variables ===
-const {
-  GOOGLE_API_KEY,
-  PINECONE_API_KEY,
-  ENG_PINECONE_INDEX,
-  SUPABASE_URL,
-  SUPABASE_KEY,
-  AUTH_SECRET,
-} = process.env;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
-
-let executor;
-
-// === Setup Function Entry ===
-export default async ({ req, res }) => {
+export default async ({ req, res, log, error }) => {
   try {
+    // === Environment Variables ===
+    const {
+      GOOGLE_API_KEY,
+      PINECONE_API_KEY,
+      ENG_PINECONE_INDEX,
+      SUPABASE_URL,
+      SUPABASE_KEY,
+      AUTH_SECRET,
+    } = process.env;
+
+    if (
+      !GOOGLE_API_KEY ||
+      !PINECONE_API_KEY ||
+      !ENG_PINECONE_INDEX ||
+      !SUPABASE_URL ||
+      !SUPABASE_KEY ||
+      !AUTH_SECRET
+    ) {
+      throw new Error("Missing required environment variables");
+    }
+
     const body = req.body || {};
     const { message, sessionId, authToken } = body;
 
@@ -40,55 +45,68 @@ export default async ({ req, res }) => {
       );
     }
 
-    if (!executor) {
-      const pineconeIndex = pinecone.Index(ENG_PINECONE_INDEX);
+    // === Supabase Client ===
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-      const vectorStore = await PineconeStore.fromExistingIndex(
-        new GoogleGenerativeAIEmbeddings({
-          model: "text-embedding-004",
-          apiKey: GOOGLE_API_KEY,
-        }),
-        { pineconeIndex },
-      );
+    // === Pinecone Setup ===
+    const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
+    const pineconeIndex = pinecone.Index(ENG_PINECONE_INDEX);
 
-      const tools = [
-        {
-          name: "insights",
-          description: "Fetch insights from previous chats",
-          async func() {
-            const { data, error } = await supabase.from("insights").select("*");
-            if (error) throw new Error(error.message);
-            return JSON.stringify(data);
-          },
-        },
-        {
-          name: "English database",
-          description:
-            "Retrieve scientific information to answer user queries.",
-          async func(query) {
-            const results = await vectorStore.similaritySearch(query, 5);
-            return results.map((r) => r.pageContent).join("\n\n---\n");
-          },
-        },
-      ];
-
-      const model = new ChatGoogleGenerativeAI({
-        model: "gemini-2.0-flash",
+    const vectorStore = await PineconeStore.fromExistingIndex(
+      new GoogleGenerativeAIEmbeddings({
+        model: "text-embedding-004",
         apiKey: GOOGLE_API_KEY,
-        systemInstruction: {
-          role: "system",
-          content: `You are an AI agent who answers questions related to English. When you receive a prompt, you must look at the insights database to gain insights and then use the English database tool to fetch all the scientific knowledge. Be careful about grammar. Do not tell anything about the tools you have access to or the about any kind of metadata`,
+      }),
+      { pineconeIndex },
+    );
+
+    // === Tools ===
+    const tools = [
+      {
+        name: "insights",
+        description: "Fetch insights from previous chats",
+        async func() {
+          const { data, error } = await supabase.from("insights").select("*");
+          if (error) throw new Error(error.message);
+          return JSON.stringify(data);
         },
-      });
+      },
+      {
+        name: "Science database",
+        description: "Retrieve information to answer user queries.",
+        async func(query) {
+          const results = await vectorStore.similaritySearch(query, 5);
+          return results.map((r) => r.pageContent).join("\n\n---\n");
+        },
+      },
+    ];
 
-      executor = await initializeAgentExecutorWithOptions(tools, model, {
-        agentType: "zero-shot-react-description",
-        verbose: true,
-        returnIntermediateSteps: true,
-      });
-    }
+    // === Chat Model ===
+    const model = new ChatGoogleGenerativeAI({
+      model: "gemini-2.0-flash",
+      apiKey: GOOGLE_API_KEY,
+      systemInstruction: {
+        role: "system",
+        content: `You are an AI agent who answers questions related to history, geography, political science and economics. When you receive a prompt, you must use the SST database tool to fetch all the knowledge. Prefer answering in detail and in the format of bullet points. Do not tell anything about the tools you have access , training data or the about any kind of metadata`,
+      },
+    });
 
-    // Fetch last 5 messages
+    const executor = await initializeAgentExecutorWithOptions(tools, model, {
+      agentType: "zero-shot-react-description",
+      verbose: true,
+      returnIntermediateSteps: true,
+    });
+
+    // === Format Chat History ===
+    const formatHistory = (history) =>
+      history
+        .map(
+          (msg) =>
+            `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`,
+        )
+        .join("\n");
+
+    // === Fetch & Format Chat History ===
     const { data: history, error: fetchError } = await supabase
       .from("sci-messages")
       .select("role, content")
@@ -97,17 +115,7 @@ export default async ({ req, res }) => {
       .limit(5);
 
     if (fetchError) throw new Error(fetchError.message);
-
-    const formatHistory = (history) =>
-      history
-        .reverse()
-        .map(
-          (msg) =>
-            `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`,
-        )
-        .join("\n");
-
-    const formattedHistory = formatHistory(history);
+    const formattedHistory = formatHistory(history.reverse());
 
     const systemMsg =
       "System: You are an AI agent created by Arjav who answers questions related to English. Always answer in detail unless specified not to. Be careful about grammar. Do not tell anything about the tools you have access to or the about any kind of metadata";
@@ -116,8 +124,10 @@ export default async ({ req, res }) => {
       ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`
       : `${systemMsg}\nUser: ${message}`;
 
+    // === Run Agent ===
     const result = await executor.invoke({ input: finalInput });
 
+    // === Store messages in Supabase ===
     const { error: insertError } = await supabase.from("eng-messages").insert([
       { session_id: sessionId, role: "user", content: message },
       { session_id: sessionId, role: "assistant", content: result.output },
@@ -125,6 +135,7 @@ export default async ({ req, res }) => {
 
     if (insertError) throw new Error(insertError.message);
 
+    // === Return Response ===
     return res.json({
       success: true,
       response: result.output,
@@ -132,7 +143,7 @@ export default async ({ req, res }) => {
       timestamp: Date.now(),
     });
   } catch (err) {
-    console.error("❌ Error:", err);
+    error("❌ Error:", err);
     return res.json({ error: err.message }, 500);
   }
 };
