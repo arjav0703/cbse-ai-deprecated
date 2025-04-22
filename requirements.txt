@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+langchain
+google-generativeai
+pinecone-client
+supabase
+langchain-google-genai
