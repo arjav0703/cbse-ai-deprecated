@@ -2,6 +2,6 @@ fastapi
 uvicorn[standard]
 langchain
 google-generativeai
-pinecone-client
+pinecone
 supabase
 langchain-google-genai
