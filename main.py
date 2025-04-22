@@ -31,8 +31,6 @@ supabase: Client = create_client(str(SUPABASE_URL), str(SUPABASE_KEY))
 pc = Pinecone(
     api_key=os.environ.get("PINECONE_API_KEY")
 )
-# index = pc.Index('english')
-
 
 # === Helper Functions ===
 def format_history(history):
@@ -155,3 +153,7 @@ async def chat(request: Request):
             status_code=500,
             content={"error": str(e)}
         )
+
+# main function for appwrite
+def main():
+    return app
