@@ -59,7 +59,7 @@ async def english_database(query: str):
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="science-9",
         embedding=embeddings,
-        text_key="text"  # Verify your metadata field name
+        text_key="text"
     )
 
     results = vectorstore.similarity_search(query, k=5)
@@ -79,7 +79,6 @@ async def chat(request: Request):
         if auth_token != AUTH_SECRET:
             raise HTTPException(status_code=401, detail="Unauthorized")
 
-        # === Tools Setup ===
         tools = [
             Tool(
                 name="insights",
@@ -95,7 +94,6 @@ async def chat(request: Request):
             )
         ]
 
-        # === Chat Model ===
         model = ChatGoogleGenerativeAI(
             model="gemini-2.0-flash",
             google_api_key=GOOGLE_API_KEY,
@@ -110,7 +108,6 @@ async def chat(request: Request):
             handle_parsing_errors=True
         )
 
-        # === Fetch Chat History ===
         history_resp = supabase.table("sci-messages") \
             .select("role, content") \
             .eq("session_id", session_id) \
@@ -120,15 +117,12 @@ async def chat(request: Request):
 
         check_supabase_response(history_resp)
 
-        # === Format Input ===
         system_msg = "System: You are an AI English tutor created by Arjav. Answer questions about English language and literature in detail."
         formatted_history = format_history(history_resp.data) if history_resp.data else ""
         final_input = f"{system_msg}\n{formatted_history}\nUser: {message}" if formatted_history else f"{system_msg}\nUser: {message}"
 
-        # === Run Agent ===
         result = await agent.arun(final_input)
 
-        # === Store Messages ===
         insert_resp = supabase.table("eng-messages").insert([
             {"session_id": session_id, "role": "user", "content": message},
             {"session_id": session_id, "role": "assistant", "content": result}
@@ -154,6 +148,6 @@ async def chat(request: Request):
             content={"error": str(e)}
         )
 
-# main function for appwrite
-def main():
+# Modified main function to accept context parameter
+def main(context=None):
     return app
