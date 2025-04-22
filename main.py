@@ -12,7 +12,10 @@ from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from supabase import create_client, Client
 
+# Load environment variables
 load_dotenv()
+
+# Initialize FastAPI
 app = FastAPI()
 
 # === Environment Variables ===
@@ -27,10 +30,7 @@ if not all([GOOGLE_API_KEY, PINECONE_API_KEY, SUPABASE_URL, SUPABASE_KEY, AUTH_S
 
 # === Clients Initialization ===
 supabase: Client = create_client(str(SUPABASE_URL), str(SUPABASE_KEY))
-
-pc = Pinecone(
-    api_key=os.environ.get("PINECONE_API_KEY")
-)
+pc = Pinecone(api_key=PINECONE_API_KEY)
 
 # === Helper Functions ===
 def format_history(history):
@@ -40,9 +40,8 @@ def format_history(history):
     )
 
 def check_supabase_response(response):
-    error = getattr(response, "error", None)
-    if error:
-        raise Exception(error.message)
+    if hasattr(response, 'error') and response.error:
+        raise Exception(response.error.message)
     return response
 
 async def fetch_insights():
@@ -148,6 +147,52 @@ async def chat(request: Request):
             content={"error": str(e)}
         )
 
-# Modified main function to accept context parameter
+# Appwrite-compatible handler
+async def handler(request):
+    """
+    Handle Appwrite function requests and route them to FastAPI
+    """
+    # Convert Appwrite request to ASGI scope
+    body = await request.body()
+    headers = dict(request.headers)
+
+    scope = {
+        "type": "http",
+        "method": request.method,
+        "path": request.path,
+        "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+        "query_string": request.query_string.encode() if request.query_string else b"",
+        "body": body,
+    }
+
+    # Create async receive/send functions
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message):
+        pass  # We'll collect the response instead
+
+    # Collect the response
+    response = {}
+
+    async def send_wrapper(message):
+        nonlocal response
+        if message["type"] == "http.response.start":
+            response["status"] = message["status"]
+            response["headers"] = {k.decode(): v.decode() for k, v in message["headers"]}
+        elif message["type"] == "http.response.body":
+            response["body"] = message.get("body", b"").decode()
+
+    # Call the FastAPI app
+    await app(scope, receive, send_wrapper)
+
+    # Return Appwrite-compatible response
+    return {
+        "statusCode": response.get("status", 200),
+        "headers": response.get("headers", {}),
+        "body": response.get("body", "")
+    }
+
+# Main function that Appwrite will call
 def main(context=None):
-    return app
+    return handler
