@@ -4,4 +4,5 @@ langchain
 google-generativeai
 pinecone
 supabase
+langchain-community
 langchain-google-genai
