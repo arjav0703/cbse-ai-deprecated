@@ -59,7 +59,7 @@ async def english_database(query: str):
     )
 
     vectorstore = PineconeVectorStore.from_existing_index(
-        index_name="english",
+        index_name="science-9",
         embedding=embeddings,
         text_key="text"  # Verify your metadata field name
     )
