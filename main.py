@@ -193,5 +193,5 @@ async def handler(request):
         "body": response.get("body", "")
     }
 
-def main(context):
-    return asyncio.run(handler(context.req))
+async def main(context):
+    return await handler(context.req)
