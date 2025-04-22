@@ -193,6 +193,5 @@ async def handler(request):
         "body": response.get("body", "")
     }
 
-# Main function that Appwrite will call
-def main(context=None):
-    return handler
+def main(context):
+    return asyncio.run(handler(context.req))
