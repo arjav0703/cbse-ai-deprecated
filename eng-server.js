@@ -60,15 +60,15 @@ export default async ({ req, res, log, error }) => {
 
     // === Tools ===
     const tools = [
-      {
-        name: "insights",
-        description: "Fetch insights from previous chats",
-        async func() {
-          const { data, error } = await supabase.from("insights").select("*");
-          if (error) throw new Error(error.message);
-          return JSON.stringify(data);
-        },
-      },
+      // {
+      //   name: "insights",
+      //   description: "Fetch insights from previous chats",
+      //   async func() {
+      //     const { data, error } = await supabase.from("insights").select("*");
+      //     if (error) throw new Error(error.message);
+      //     return JSON.stringify(data);
+      //   },
+      // },
       {
         name: "English database",
         description: "Retrieve information to answer user queries.",
@@ -115,7 +115,7 @@ export default async ({ req, res, log, error }) => {
     const formattedHistory = formatHistory(history.reverse());
 
     const systemMsg =
-      "System: You are an AI agent created by Arjav who answers questions related to English. Always answer in detail unless specified not to. Always use the English database to answer user queries";
+      "System: You are an AI agent created by Arjav who answers questions related to English. Always answer in detail unless specified not to. Always prefer knowledge from the English database over any other source.";
 
     const finalInput = formattedHistory
       ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`

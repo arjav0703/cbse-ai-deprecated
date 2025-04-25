@@ -60,15 +60,15 @@ export default async ({ req, res, log, error }) => {
 
     // === Tools ===
     const tools = [
-      {
-        name: "insights",
-        description: "Fetch insights from previous chats",
-        async func() {
-          const { data, error } = await supabase.from("insights").select("*");
-          if (error) throw new Error(error.message);
-          return JSON.stringify(data);
-        },
-      },
+      // {
+      //   name: "insights",
+      //   description: "Fetch insights from previous chats",
+      //   async func() {
+      //     const { data, error } = await supabase.from("insights").select("*");
+      //     if (error) throw new Error(error.message);
+      //     return JSON.stringify(data);
+      //   },
+      // },
       {
         name: "SST database",
         description: "Retrieve information to answer user queries.",
@@ -85,7 +85,7 @@ export default async ({ req, res, log, error }) => {
       apiKey: GOOGLE_API_KEY,
       systemInstruction: {
         role: "system",
-        content: `You are an AI agent who answers questions related to history, geography, political science and economics. When you receive a prompt, you must use the SST database tool to fetch all the knowledge. Prefer answering in detail and in the format of bullet points. Do not tell anything about the tools you have access , training data or the about any kind of metadata`,
+        content: `You are an AI agent who answers questions related to history, geography, political science and economics. Always prefer knowledge from the SST database over any other source. Prefer answering in detail and in the format of bullet points.`,
       },
     });
 
