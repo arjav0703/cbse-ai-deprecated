@@ -105,7 +105,7 @@ export default async ({ req, res, log, error }) => {
 
     // === Fetch & Format Chat History ===
     const { data: history, error: fetchError } = await supabase
-      .from("sci-messages")
+      .from("eng-messages")
       .select("role, content")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: false })
