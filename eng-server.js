@@ -1,3 +1,6 @@
+import express from "express";
+import dotenv from "dotenv";
+import bodyParser from "body-parser";
 import {
   ChatGoogleGenerativeAI,
   GoogleGenerativeAIEmbeddings,
@@ -6,42 +9,48 @@ import { Pinecone } from "@pinecone-database/pinecone";
 import { PineconeStore } from "@langchain/community/vectorstores/pinecone";
 import { initializeAgentExecutorWithOptions } from "langchain/agents";
 import pkg from "@supabase/supabase-js";
+
 const { createClient } = pkg;
 
-export default async ({ req, res, log, error }) => {
+dotenv.config();
+const app = express();
+app.use(bodyParser.json());
+
+const {
+  GOOGLE_API_KEY,
+  PINECONE_API_KEY,
+  SUPABASE_URL,
+  SUPABASE_KEY,
+  AUTH_SECRET,
+  PORT = 3000,
+} = process.env;
+
+if (
+  !GOOGLE_API_KEY ||
+  !PINECONE_API_KEY ||
+  !SUPABASE_URL ||
+  !SUPABASE_KEY ||
+  !AUTH_SECRET
+) {
+  console.error("❌ Missing required environment variables");
+  process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+app.post("/eng", async (req, res) => {
   try {
-    // === Environment Variables ===
-    const {
-      GOOGLE_API_KEY,
-      PINECONE_API_KEY,
-      SUPABASE_URL,
-      SUPABASE_KEY,
-      AUTH_SECRET,
-    } = process.env;
-
-    if (
-      !GOOGLE_API_KEY ||
-      !PINECONE_API_KEY ||
-      !SUPABASE_URL ||
-      !SUPABASE_KEY ||
-      !AUTH_SECRET
-    ) {
-      throw new Error("Missing required environment variables");
-    }
-
-    const body = req.body || {};
-    const { message, sessionId, authToken } = body;
+    const { message, sessionId, authToken } = req.body;
 
     if (!message || !sessionId) {
-      return res.json({ error: "Missing message or sessionId" }, 400);
+      return res.status(400).json({ error: "Missing message or sessionId" });
     }
 
     if (authToken !== AUTH_SECRET) {
-      return res.json({ error: "Back off, you ain't authenticated" }, 401);
+      return res
+        .status(401)
+        .json({ error: "Back off, you ain't authenticated" });
     }
-
-    // === Supabase Client ===
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // === Pinecone Setup ===
     const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
@@ -57,15 +66,6 @@ export default async ({ req, res, log, error }) => {
 
     // === Tools ===
     const tools = [
-      // {
-      //   name: "insights",
-      //   description: "Fetch insights from previous chats",
-      //   async func() {
-      //     const { data, error } = await supabase.from("insights").select("*");
-      //     if (error) throw new Error(error.message);
-      //     return JSON.stringify(data);
-      //   },
-      // },
       {
         name: "English database",
         description: "Retrieve information to answer user queries.",
@@ -76,13 +76,13 @@ export default async ({ req, res, log, error }) => {
       },
     ];
 
-    // === Chat Model ===
+    // === Model ===
     const model = new ChatGoogleGenerativeAI({
-      temperature: 1,
       model: "gemini-2.0-flash",
       apiKey: GOOGLE_API_KEY,
       systemInstruction: {
         role: "system",
+        content: systemMsg,
       },
     });
 
@@ -101,7 +101,6 @@ export default async ({ req, res, log, error }) => {
         )
         .join("\n");
 
-    // === Fetch & Format Chat History ===
     const { data: history, error: fetchError } = await supabase
       .from("eng-messages")
       .select("role, content")
@@ -110,6 +109,7 @@ export default async ({ req, res, log, error }) => {
       .limit(5);
 
     if (fetchError) throw new Error(fetchError.message);
+
     const formattedHistory = formatHistory(history.reverse());
 
     const systemMsg =
@@ -119,10 +119,8 @@ export default async ({ req, res, log, error }) => {
       ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`
       : `${systemMsg}\nUser: ${message}`;
 
-    // === Run Agent ===
     const result = await executor.invoke({ input: finalInput });
 
-    // === Store messages in Supabase ===
     const { error: insertError } = await supabase.from("eng-messages").insert([
       { session_id: sessionId, role: "user", content: message },
       { session_id: sessionId, role: "assistant", content: result.output },
@@ -130,7 +128,6 @@ export default async ({ req, res, log, error }) => {
 
     if (insertError) throw new Error(insertError.message);
 
-    // === Return Response ===
     return res.json({
       success: true,
       response: result.output,
@@ -138,7 +135,12 @@ export default async ({ req, res, log, error }) => {
       timestamp: Date.now(),
     });
   } catch (err) {
-    error("❌ Error:", err);
-    return res.json({ error: err.message }, 500);
+    console.error("❌ Error:", err);
+    return res.status(500).json({ error: err.message });
   }
-};
+});
+
+// === Start Server ===
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});

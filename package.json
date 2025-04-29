@@ -7,13 +7,14 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@langchain/community": "^0.3.40",
-    "@langchain/google-genai": "^0.2.3",
-    "@pinecone-database/pinecone": "^5.1.1",
+    "@langchain/community": "^0.3.41",
+    "@langchain/google-genai": "^0.2.5",
+    "@pinecone-database/pinecone": "^5.1.2",
     "@supabase/supabase-js": "^2.49.4",
+    "body-parser": "^2.2.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "langchain": "^0.3.21",
+    "langchain": "^0.3.24",
     "pm2": "^6.0.5",
     "vercel": "^41.6.1"
   }
