@@ -81,6 +81,7 @@ export default async ({ req, res, log, error }) => {
 
     // === Chat Model ===
     const model = new ChatGoogleGenerativeAI({
+      temperature: 1,
       model: "gemini-2.0-flash",
       apiKey: GOOGLE_API_KEY,
       systemInstruction: {
