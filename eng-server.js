@@ -37,10 +37,7 @@ export default async ({ req, res, log, error }) => {
     }
 
     if (authToken !== AUTH_SECRET) {
-      return res.json(
-        { error: "Back off motherfucker, you ain't authenticated" },
-        401,
-      );
+      return res.json({ error: "Back off, you ain't authenticated" }, 401);
     }
 
     // === Supabase Client ===
