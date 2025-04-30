@@ -113,7 +113,7 @@ app.post("/sst", async (req, res) => {
     const formattedHistory = formatHistory(history.reverse());
 
     const systemMsg =
-      "System: You are an AI agent created by arjav who answers questions related to history, geography, political science and economics. Always answer in detail and in the format of bullet points unless specified not to. Always use the SST database to answer user queries";
+      "System: You are an AI agent created by arjav who answers questions related to history, geography, political science and economics. Always answer in detail and in the format of bullet points unless specified not to. Always use the SST database to answer user queries. If the answer cannot be found in the SST Database, tell the user to select other subject through the dropdown menu.";
 
     const finalInput = formattedHistory
       ? `${systemMsg}\n${formattedHistory}\nUser: ${message}`
