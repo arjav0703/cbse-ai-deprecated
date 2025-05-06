@@ -1,3 +1,4 @@
+#broken config, do not use
 FROM node:20-alpine
 
 WORKDIR /app
